@@ -1,0 +1,45 @@
+<resources>
+    <string name="app_name">DL Signer</string>
+	<string name="title_activity_main">NFC DL Signer 1.0</string>
+	<string name="site_url">www.d-logic.com/nfc-rfid-reader-sdk/</string>
+
+    <string name="default_pin">00000000</string>
+
+	<string-array name="digest_algorithms">
+		<item>SHA1</item>
+		<item>SHA-224</item>
+		<item>SHA-256</item>
+		<item>SHA-384</item>
+		<item>SHA-512</item>
+	</string-array>
+
+	<string-array name="key_indexes">
+		<item>0</item>
+		<item>1</item>
+		<item>2</item>
+	</string-array>
+
+	<string-array name="cipher_algorithms">
+		<item>RSA</item>
+		<item>ECDSA</item>
+	</string-array>
+
+	<integer-array name="authentication_mode_values">
+		<item>96</item>
+		<item>97</item>
+	</integer-array>
+
+	<string name="txt_user_pin">User PIN:</string>
+    <string name="txt_device_type">File to sign:</string>
+    <string name="txt_digest_algorithm">Digest algorithm:</string>
+    <string name="txt_key_index">Key index:</string>
+    <string name="txt_cipher_algorithm">Cipher algorithm:</string>
+    <string name="txt_key">-</string>
+    <string name="txt_card_id_sak">File:</string>
+    <string name="txt_card_uid">Digest:</string>
+    <string name="txt_block_data">Signature:</string>
+
+	<string name="txt_btn_choose_file">CHOOSE\nA FILE</string>
+	<string name="txt_btn_get_signature">GET\nSIGNATURE</string>
+	<string name="txt_btn_save_signature">SAVE\nSIGNATURE</string>
+</resources>
