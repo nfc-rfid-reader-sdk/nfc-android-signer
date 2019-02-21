@@ -3,9 +3,11 @@ package net.dlogic.dl_signer_nfc;
 /**
  * Created by dlogic on 12.2.2019.
  *
- * 12.2.2019. class DLSignerNfc v1.0
- *            - Initial support for DLSigner Card Applet version 2.0
- *            - Supported signature generator, off-card hashing method
+ * 21.02.2019. class DLSignerNfc v1.1
+ *             - Digest padding implemented (except when digest is None with RSA)
+ * 12.02.2019. class DLSignerNfc v1.0
+ *             - Initial support for DLSigner Card Applet version 2.0
+ *             - Supported signature generator, off-card hashing method
  */
 
 import android.app.Activity;
@@ -21,11 +23,20 @@ import android.widget.Toast;
 import java.io.IOException;
 import java.lang.System;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import net.dlogic.dl_signer.Audio;
 import net.dlogic.util.ArrayUtil;
 import net.dlogic.util.Bitwise;
+
+import org.spongycastle.asn1.ASN1ObjectIdentifier;
+import org.spongycastle.asn1.DERNull;
+import org.spongycastle.asn1.nist.NISTObjectIdentifiers;
+import org.spongycastle.asn1.oiw.OIWObjectIdentifiers;
+import org.spongycastle.asn1.x509.AlgorithmIdentifier;
+import org.spongycastle.asn1.x509.DigestInfo;
+
 import static android.os.SystemClock.uptimeMillis;
 
 public class DLSignerNfc {
@@ -198,19 +209,150 @@ public class DLSignerNfc {
     }
     //*/
 
-    public static void signInitiate(byte[] pin, byte cipherAlg, byte paddingAlg, byte key_index, byte[] plain) {
+    public static void signInitiate(byte[] pin, byte cipherAlg, byte digestAlg, byte key_index, byte[] plain) {
 
-        Byte[] params = {cipherAlg, paddingAlg, key_index};
+        Byte[] params = {cipherAlg, digestAlg, key_index};
         new AsyncSign().execute(ArrayUtil.bytesToObjects(pin), params, ArrayUtil.bytesToObjects(plain));
     }
 
-    private static byte[] innerSign(byte[] pin, byte cipherAlg, byte paddingAlg, byte key_index, byte[] plainText) throws DLSignerNfcException, InterruptedException {
+    private static byte[] innerSign(byte[] pin, byte cipherAlg, byte digestAlg, byte key_index, byte[] plain) throws DLSignerNfcException, InterruptedException {
+        byte jcdl_card_type;
+        byte paddingAlg;
+        //byte jc_signer_digest;
+        byte[] tbs_digest;
+        byte[] selectResponse;
+        ASN1ObjectIdentifier oid;
 
-        //byte[] selectResponse =
-        apduSelectByAid(Consts.AID);
+        selectResponse = apduSelectByAid(Consts.AID);
+        jcdl_card_type = selectResponse[0];
         //byte DLSignerType = selectResponse[0];
         apduLogin(false, pin);
-        return apduGenerateSignature(cipherAlg, paddingAlg, key_index, plainText);
+
+        if (cipherAlg == 0) {
+            //---RSA--------------------------------------------------------------------------------
+            switch (digestAlg) {
+                case 1: // "SHA-1":
+                    oid = OIWObjectIdentifiers.idSHA1;
+                    break;
+                case 2: // "SHA-224":
+                    oid = NISTObjectIdentifiers.id_sha224;
+                    break;
+                case 3: // "SHA-256":
+                    oid = NISTObjectIdentifiers.id_sha256;
+                    break;
+                case 4: // "SHA-384":
+                    oid = NISTObjectIdentifiers.id_sha384;
+                    break;
+                case 5: // "SHA-512":
+                    oid = NISTObjectIdentifiers.id_sha512;
+                    break;
+                default: // 0... => "None":
+                    oid = null;
+            }
+
+            if (oid != null) {
+                DigestInfo dInfo = new DigestInfo(new AlgorithmIdentifier(oid, DERNull.INSTANCE), plain);
+
+                try {
+
+                    tbs_digest = dInfo.getEncoded();
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new DLSignerNfcException("ASN.1 module I/O error");
+                }
+            } else {
+
+                tbs_digest = plain;
+            }
+
+            paddingAlg = 1; // PKCS1 padding is only supported for RSA
+
+        } else {
+            //---ECDSA------------------------------------------------------------------------------
+            selectResponse = apduGetEcRKKeySizeBits(key_index);
+            int len = selectResponse.length;
+            short key_size_bits = (short)((selectResponse[len - 4] << 8) + (selectResponse[len - 3] & 0xFF));
+
+            // ECDSA hash/plain alignment before signing:
+            int eff_tbs_length = (key_size_bits + 7) / 8;
+
+            if (jcdl_card_type == JCDLSignerCards.DLSigner145)
+            {
+                tbs_digest = new byte[eff_tbs_length];
+                Arrays.fill(tbs_digest, (byte) 0);
+            }
+            else
+            {
+                int tbs_length = 0;
+                switch (key_size_bits)
+                {
+                    case 112:
+                    case 113:
+                    case 128:
+                    case 131:
+                    case 160:
+                        tbs_length = 20;
+                        break;
+                    case 163:
+                    case 192:
+                    case 193:
+                    case 224:
+                        tbs_length = 28;
+                        break;
+                    case 233:
+                    case 239:
+                    case 256:
+                        tbs_length = 32;
+                        break;
+                    case 283:
+                    case 384:
+                        tbs_length = 48;
+                        break;
+                    case 409:
+                    case 521:
+                        tbs_length = 64;
+                        break;
+                    default:
+                        throw new DLSignerNfcException("Key size doesn't match with digest length");
+                }
+                tbs_digest = new byte[tbs_length];
+                Arrays.fill(tbs_digest, (byte) 0);
+            }
+
+            if (eff_tbs_length > plain.length)
+            {
+                if (jcdl_card_type == JCDLSignerCards.DLSigner145)
+                {
+                    tbs_digest = plain;
+                }
+                else
+                {
+                    System.arraycopy(plain, 0, tbs_digest, tbs_digest.length - plain.length, plain.length);
+                }
+            }
+            else // in case of (to_be_signed.Length <= hash.Length)
+            {
+                System.arraycopy(plain, 0, tbs_digest, tbs_digest.length - eff_tbs_length, eff_tbs_length);
+                if ((key_size_bits % 8) != 0)
+                {
+                    byte prev_byte = 0;
+                    byte shift_by = (byte)(key_size_bits % 8);
+
+                    for (int i = tbs_digest.length - eff_tbs_length; i < tbs_digest.length; i++)
+                    {
+                        byte temp = tbs_digest[i];
+                        tbs_digest[i] >>>= 8 - shift_by;
+                        tbs_digest[i] |= prev_byte;
+                        prev_byte = temp <<= shift_by;
+                    }
+                }
+            }
+
+            paddingAlg = 0; // PaddingNone is only supported for ECDSA
+        }
+
+        return apduGenerateSignature(cipherAlg, paddingAlg, key_index, tbs_digest);
     }
 
     public static byte[] apduSelectByAid(byte[] aid) throws DLSignerNfcException {
@@ -222,6 +364,17 @@ public class DLSignerNfc {
             throw new DLSignerNfcException("APDU Error: " + getApduError(sw));
 
         if (rapdu.length != 16)
+            throw new DLSignerNfcException("Unsupported card");
+
+        return rapdu;
+    }
+
+    public static byte[] apduGetEcRKKeySizeBits(byte key_index) throws DLSignerNfcException {
+        byte[] sw = new byte[2];
+
+        byte[] rapdu = transceiveAPDU(Consts.CLA_DEFAULT, Consts.INS_GET_EC_RK_SIZE, key_index, (byte)0, null, (short) 4, true, sw);
+
+        if (rapdu.length < 7)
             throw new DLSignerNfcException("Unsupported card");
 
         return rapdu;
@@ -280,6 +433,8 @@ public class DLSignerNfc {
                 return "security condition not satisfied";
             case Consts.SW_CONDITIONS_NOT_SATISFIED:
                 return "conditions of use not satisfied";
+            case Consts.SW_DATA_INVALID:
+                return "Data invalid (probably oversized plain-text limit for RSA using PKCS#1 padding)";
             case Consts.SW_WRONG_DATA:
                 return "wrong data";
             case Consts.SW_RECORD_NOT_FOUND:
@@ -359,13 +514,13 @@ public class DLSignerNfc {
         return ret;
     }
 
-    public static class JCDLSignerDigests {
-        public static final byte ALG_NULL = 0;
-        public static final byte ALG_SHA = 1; // SHA1
-        public static final byte ALG_SHA_256 = 2; // SHA2-256
-        public static final byte ALG_SHA_384 = 3; // SHA2-384
-        public static final byte ALG_SHA_512 = 4; // SHA2-512
-        public static final byte ALG_SHA_224 = 5; // SHA2-224
+    // DLJavaCardSignerCardTypes:
+    public static class JCDLSignerCards {
+        public static final byte DLSigner81 = (byte) 0xA0;
+        public static final byte DLSigner22 = (byte) 0xA1;
+        public static final byte DLSigner30 = (byte) 0xA2;
+        public static final byte DLSigner10 = (byte) 0xA3;
+        public static final byte DLSigner145 = (byte) 0xAA;
     }
 
     public static class Consts {
@@ -404,6 +559,7 @@ public class DLSignerNfc {
 
         // APDU Error codes:
         static final short SW_SECURITY_STATUS_NOT_SATISFIED = 0x6982;
+        static final short SW_DATA_INVALID = 0x6984;
         static final short SW_CONDITIONS_NOT_SATISFIED = 0x6985;
         static final short SW_WRONG_DATA = 0x6A80;
         static final short SW_RECORD_NOT_FOUND = 0x6A83;

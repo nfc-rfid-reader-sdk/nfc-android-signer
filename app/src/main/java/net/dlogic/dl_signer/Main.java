@@ -53,7 +53,7 @@ import org.apache.xml.security.keys.KeyInfo;
 import org.apache.xml.security.signature.XMLSignature;
 
 /**
- * Created by d-logic on 15.5.2015..
+ * Created by d-logic on 12.02.2019.
  */
 
 public class Main extends Activity {
@@ -76,7 +76,9 @@ public class Main extends Activity {
     private byte mDigestAlg = 2; // 0 => SHA1; 1 => SHA-224; 2 => SHA-256; 3 => SHA-384; 4 => SHA-512
     private byte mKeyIdx = 0; // default key index in card
 
-    static ProgressDialog mProgressDialog;
+    ProgressDialog mProgressDialog;
+    ProgressDialog mSpinnerDialog;
+
     DLSignerNfc mDLSignerNfc;
     byte[] mDigest;
     byte[] mSign;
@@ -236,12 +238,12 @@ public class Main extends Activity {
                 mProgressDialog.show();
                 return mProgressDialog;
             case DIALOG_WAITING_FOR_SIGNATURE:
-                mProgressDialog = new ProgressDialog(this);
-                mProgressDialog.setMessage("Tap an DL Signer card to sign...");
-                mProgressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-                mProgressDialog.setCancelable(false);
-                mProgressDialog.show();
-                return mProgressDialog;
+                mSpinnerDialog = new ProgressDialog(this);
+                mSpinnerDialog.setMessage("Tap an DL Signer card to sign...");
+                mSpinnerDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+                mSpinnerDialog.setCancelable(false);
+                mSpinnerDialog.show();
+                return mSpinnerDialog;
             default:
                 return null;
         }
@@ -347,9 +349,7 @@ public class Main extends Activity {
                     publishProgress(progress);
                 }
 
-
                 mDigest = md.digest();
-                publishProgress(1);
 
             } catch (Exception e) {
                 Log.d(LOG_TAG, e.getMessage());
@@ -366,62 +366,18 @@ public class Main extends Activity {
 
         @Override
         protected void onPostExecute(Boolean success) {
-            ASN1ObjectIdentifier mOid = null;
-            byte jc_signer_digest;
-
             //findViewById(R.id.waitingPanel).setVisibility(View.GONE);
             dismissDialog(DIALOG_HASH_PROGRESS);
 
             if (!success)
                 mDigest = null;
             else {
-                try {
 
-                    ebDigest.setText(Base64.encodeToString(mDigest, Base64.DEFAULT));
+                ebDigest.setText(Base64.encodeToString(mDigest, Base64.DEFAULT));
+                byte[] pin = ebUserPin.getText().toString().getBytes(Charset.forName("US-ASCII"));
 
-                    switch (mDigestAlg) {
-                        case 0: // "None":
-                            jc_signer_digest = DLSignerNfc.JCDLSignerDigests.ALG_NULL;
-                            mOid = null;
-                            break;
-                        case 1: // "SHA-1":
-                            jc_signer_digest = DLSignerNfc.JCDLSignerDigests.ALG_SHA;
-                            mOid = OIWObjectIdentifiers.idSHA1;
-                            break;
-                        case 2: // "SHA-224":
-                            jc_signer_digest = DLSignerNfc.JCDLSignerDigests.ALG_SHA_224;
-                            mOid = NISTObjectIdentifiers.id_sha224;
-                            break;
-                        case 3: // "SHA-256":
-                            jc_signer_digest = DLSignerNfc.JCDLSignerDigests.ALG_SHA_256;
-                            mOid = NISTObjectIdentifiers.id_sha256;
-                            break;
-                        case 4: // "SHA-384":
-                            jc_signer_digest = DLSignerNfc.JCDLSignerDigests.ALG_SHA_384;
-                            mOid = NISTObjectIdentifiers.id_sha384;
-                            break;
-                        case 5: // "SHA-512":
-                            jc_signer_digest = DLSignerNfc.JCDLSignerDigests.ALG_SHA_512;
-                            mOid = NISTObjectIdentifiers.id_sha512;
-                    }
-
-                    DigestInfo dInfo = new DigestInfo(new AlgorithmIdentifier(mOid, DERNull.INSTANCE), mDigest);
-                    mDigest = dInfo.getEncoded();
-
-
-
-                    byte[] pin = ebUserPin.getText().toString().getBytes(Charset.forName("US-ASCII"));
-                    if (mCipherAlg == 0)
-                        mPaddingAlg = 1; // PKCS1 padding is only supported for RSA
-                    else
-                        mPaddingAlg = 0; // PaddingNone otherwise
-
-                    showDialog(DIALOG_WAITING_FOR_SIGNATURE);
-                    DLSignerNfc.signInitiate(pin, mCipherAlg, mPaddingAlg, mKeyIdx, mDigest);
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                showDialog(DIALOG_WAITING_FOR_SIGNATURE);
+                DLSignerNfc.signInitiate(pin, mCipherAlg, mDigestAlg, mKeyIdx, mDigest);
             }
         }
     }
