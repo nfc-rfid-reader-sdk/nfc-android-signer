@@ -21,7 +21,7 @@
             android:text="@string/app_name"
             android:textAppearance="?android:attr/textAppearanceMedium"
             android:textColor="#FFFFFF"
-            android:textSize="20sp"
+            android:textSize="20dp"
             android:textStyle="bold" />
 
     </LinearLayout>
@@ -56,7 +56,7 @@
                     android:scaleType="centerInside"
                     android:text="@string/txt_btn_choose_file"
                     android:textColor="@drawable/button_text_color"
-                    android:textSize="10sp" />
+                    android:textSize="10dp" />
             </LinearLayout>
 
             <LinearLayout
@@ -75,7 +75,7 @@
                     android:scaleType="centerInside"
                     android:text="@string/txt_btn_get_signature"
                     android:textColor="@drawable/button_text_color"
-                    android:textSize="10sp" />
+                    android:textSize="10dp" />
             </LinearLayout>
 
             <LinearLayout
@@ -94,7 +94,7 @@
                     android:scaleType="centerInside"
                     android:text="@string/txt_btn_save_signature"
                     android:textColor="@drawable/button_text_color"
-                    android:textSize="10sp" />
+                    android:textSize="10dp" />
             </LinearLayout>
 
         </LinearLayout>
@@ -133,7 +133,7 @@
                     android:inputType="none"
                     android:text="@string/txt_cipher_algorithm"
                     android:textColor="#8fc546"
-                    android:textSize="12sp"
+                    android:textSize="12dp"
                     android:textStyle="bold" />
 
                 <Spinner
@@ -161,7 +161,7 @@
                     android:inputType="none"
                     android:text="@string/txt_digest_algorithm"
                     android:textColor="#8fc546"
-                    android:textSize="12sp"
+                    android:textSize="12dp"
                     android:textStyle="bold" />
 
                 <Spinner
@@ -188,7 +188,7 @@
                     android:inputType="none"
                     android:text="@string/txt_key_index"
                     android:textColor="#8fc546"
-                    android:textSize="12sp"
+                    android:textSize="12dp"
                     android:textStyle="bold" />
 
                 <Spinner
@@ -218,7 +218,7 @@
                 android:inputType="none"
                 android:text="@string/txt_user_pin"
                 android:textColor="#8fc546"
-                android:textSize="12sp"
+                android:textSize="12dp"
                 android:textStyle="bold" />
 
             <EditText
@@ -235,8 +235,8 @@
                 android:maxLength="8"
                 android:singleLine="true"
                 android:text="@string/default_pin"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="12sp"
+                android:textColor="@android:color/black"
+                android:textSize="12dp"
                 tools:layout_height="38dp" />
         </LinearLayout>
 
@@ -270,8 +270,8 @@
                 android:paddingStart="120dp"
                 android:paddingEnd="10dp"
                 android:singleLine="true"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="14sp" />
+                android:textColor="@android:color/black"
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/labelTagId"
@@ -282,7 +282,7 @@
                 android:inputType="none"
                 android:text="@string/txt_card_id_sak"
                 android:textColor="#8fc546"
-                android:textSize="8sp"
+                android:textSize="12dp"
                 android:textStyle="bold" />
 
         </FrameLayout>
@@ -300,13 +300,12 @@
                 android:layout_gravity="center_vertical"
                 android:background="@drawable/text_view_lg"
                 android:enabled="true"
-                android:inputType="none"
                 android:paddingStart="120dp"
                 android:paddingEnd="10dp"
                 android:singleLine="true"
-                android:textColor="@android:color/darker_gray"
+                android:textColor="@android:color/black"
                 android:textIsSelectable="true"
-                android:textSize="14sp" />
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/labelCardUid"
@@ -316,7 +315,7 @@
                 android:gravity="start|center_vertical"
                 android:text="@string/txt_card_uid"
                 android:textColor="#8fc546"
-                android:textSize="8sp"
+                android:textSize="12dp"
                 android:textStyle="bold" />
 
         </FrameLayout>
@@ -333,12 +332,13 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:background="@drawable/text_view_lg"
-                android:enabled="false"
+                android:enabled="true"
                 android:paddingStart="120dp"
                 android:paddingEnd="10dp"
                 android:singleLine="true"
-                android:textColor="@android:color/darker_gray"
-                android:textSize="14sp" />
+                android:textColor="@android:color/black"
+                android:textIsSelectable="true"
+                android:textSize="14dp" />
 
             <TextView
                 android:id="@+id/labelBlockData"
@@ -348,7 +348,7 @@
                 android:gravity="start|center_vertical"
                 android:text="@string/txt_block_data"
                 android:textColor="#8fc546"
-                android:textSize="8sp"
+                android:textSize="12dp"
                 android:textStyle="bold" />
         </FrameLayout>
     </LinearLayout>

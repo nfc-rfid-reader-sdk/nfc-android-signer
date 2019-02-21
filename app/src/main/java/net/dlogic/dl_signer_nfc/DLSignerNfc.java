@@ -133,9 +133,18 @@ public class DLSignerNfc {
         @Override
         protected Boolean doInBackground(Byte[]... params) {
 
-            try {
+            if ((mTag != null) && (!mTag.isConnected())) {
+                try {
+                    mTag.connect();
+                } catch (IOException e) {
+                    mTag = null;
+                    e.printStackTrace();
+                }
+            }
 
+            try {
                 long TimeMarker = uptimeMillis();
+
                 while ((mTag == null) || !mTag.isConnected()) {
                     if (TimeMarker < (uptimeMillis() - Consts.WAIT_CARD_TIMEOUT))
                         throw new DLSignerNfcException("Waiting for card timeout");
@@ -157,6 +166,11 @@ public class DLSignerNfc {
                 Message = e.getMessage();
                 return false;
             } finally {
+                try {
+                    mTag.close();
+                } catch (IOException ioe) {
+                    ioe.printStackTrace();
+                }
 //                if (tg != null) {
 //                    try {
 //                        tg.join();
@@ -372,10 +386,10 @@ public class DLSignerNfc {
     public static byte[] apduGetEcRKKeySizeBits(byte key_index) throws DLSignerNfcException {
         byte[] sw = new byte[2];
 
-        byte[] rapdu = transceiveAPDU(Consts.CLA_DEFAULT, Consts.INS_GET_EC_RK_SIZE, key_index, (byte)0, null, (short) 4, true, sw);
+        byte[] rapdu = transceiveAPDU(Consts.CLA_DEFAULT, Consts.INS_GET_EC_RK_SIZE, key_index, (byte)0, null, (short) 0, true, sw);
 
         if (rapdu.length < 7)
-            throw new DLSignerNfcException("Unsupported card");
+            throw new DLSignerNfcException("Wrong key index");
 
         return rapdu;
     }
@@ -434,11 +448,13 @@ public class DLSignerNfc {
             case Consts.SW_CONDITIONS_NOT_SATISFIED:
                 return "conditions of use not satisfied";
             case Consts.SW_DATA_INVALID:
-                return "Data invalid (probably oversized plain-text limit for RSA using PKCS#1 padding)";
+                return "Data invalid (probably plain-text limit exceeded for RSA using PKCS#1 padding)";
             case Consts.SW_WRONG_DATA:
                 return "wrong data";
             case Consts.SW_RECORD_NOT_FOUND:
                 return "record not found";
+            case Consts.SW_DATA_NOT_FOUND:
+                return "referenced data not found";
             case Consts.SW_ENTITY_ALREADY_EXISTS:
                 return "entity already exists";
             case Consts.SW_INS_NOT_SUPPORTED:
@@ -563,6 +579,7 @@ public class DLSignerNfc {
         static final short SW_CONDITIONS_NOT_SATISFIED = 0x6985;
         static final short SW_WRONG_DATA = 0x6A80;
         static final short SW_RECORD_NOT_FOUND = 0x6A83;
+        static final short SW_DATA_NOT_FOUND =0x6A88;
         static final short SW_ENTITY_ALREADY_EXISTS = 0x6A89;
         static final short SW_INS_NOT_SUPPORTED = 0x6D00;
         static final short SW_NO_PRECISE_DIAGNOSTIC = 0x6F00;

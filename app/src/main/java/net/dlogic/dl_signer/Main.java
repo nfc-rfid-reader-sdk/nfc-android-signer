@@ -1,13 +1,18 @@
 package net.dlogic.dl_signer;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.Log;
@@ -20,18 +25,12 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import net.dlogic.dialogs.FileOperation;
+import net.dlogic.dialogs.FileSelector;
+import net.dlogic.dialogs.OnHandleFileListener;
 import net.dlogic.dl_signer_nfc.DLSignerListener;
 import net.dlogic.dl_signer_nfc.DLSignerNfc;
-import net.dlogic.ufr.block_read.R;
 import net.dlogic.util.StringUtil;
-
-import org.spongycastle.asn1.DERNull;
-import org.spongycastle.asn1.DERObjectIdentifier;
-import org.spongycastle.asn1.ASN1ObjectIdentifier;
-import org.spongycastle.asn1.oiw.OIWObjectIdentifiers;
-import org.spongycastle.asn1.nist.NISTObjectIdentifiers;
-import org.spongycastle.asn1.x509.AlgorithmIdentifier;
-import org.spongycastle.asn1.x509.DigestInfo;
 
 import org.apache.xml.security.utils.Constants;
 import org.w3c.dom.Document;
@@ -39,7 +38,6 @@ import org.w3c.dom.NodeList;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 
 import javax.xml.parsers.*;
@@ -81,11 +79,12 @@ public class Main extends Activity {
 
     DLSignerNfc mDLSignerNfc;
     byte[] mDigest;
-    byte[] mSign;
+    byte[] mSignature;
 
     static Resources res;
     static int[] authModes;
     private static final int FILE_SELECT_CODE = 0;
+    final private static int REQUEST_CODE_ASK_PERMISSIONS = 301;
     private static final int DIALOG_HASH_PROGRESS = 0xAA55AA50;
     private static final int DIALOG_WAITING_FOR_SIGNATURE = 0xAA55AA51;
     private static final int DIGEST_CHUNK_SIZE = 1024 * 16; // 16 KB
@@ -137,6 +136,7 @@ public class Main extends Activity {
         ebDigest = findViewById(R.id.ebDigest);
         ebDigest.setInputType(0);
         ebSignature = findViewById(R.id.ebSignature);
+        ebSignature.setInputType(0);
 
         spnCipherAlgorithm = findViewById(R.id.spnCipherAlgorithm);
         ArrayAdapter<CharSequence> spnAuthenticationAdapter = ArrayAdapter.createFromResource(context,
@@ -195,17 +195,52 @@ public class Main extends Activity {
 
         btnChooseFile.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+
+                if (Build.VERSION.SDK_INT >= 23) {
+                    int hasWriteContactsPermission = checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE);
+
+                    if (hasWriteContactsPermission != PackageManager.PERMISSION_GRANTED) {
+
+                        if (!shouldShowRequestPermissionRationale(Manifest.permission.WRITE_CONTACTS)) {
+                            showMessageOKCancel("You need to allow access to external storage",
+                                    new DialogInterface.OnClickListener() {
+                                        @Override
+                                        public void onClick(DialogInterface dialog, int which) {
+                                            requestPermissions(new String[] {Manifest.permission.READ_EXTERNAL_STORAGE},
+                                                    REQUEST_CODE_ASK_PERMISSIONS);
+                                        }
+                                    });
+                            return;
+                        }
+
+                        requestPermissions(new String[] {Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_CODE_ASK_PERMISSIONS);
+                        return;
+                    }
+                }
+
                 showFileChooser();
             }
         });
+
         btnGetSignature.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 signFile();
             }
         });
+
         btnSaveSignature.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                Toast.makeText(context, "Not implemented yet", Toast.LENGTH_SHORT).show();
+                final String[] mFileFilter = { "*.*", ".xml", ".txt"};
+
+                new FileSelector(Main.this, FileOperation.SAVE, new OnHandleFileListener() {
+                    @Override
+                    public void handleFile(final String filePath) {
+
+                        // Handle save dialog here:
+                        Toast.makeText(Main.this, "Save: " + filePath, Toast.LENGTH_LONG).show();
+                    }
+                },
+                        mFileFilter).show();
             }
         });
 
@@ -213,14 +248,27 @@ public class Main extends Activity {
             @Override
             public void finished(Boolean success, byte[] result, String... messages) {
                 if (success) {
+
+                    mSignature = result.clone();
+                    ebSignature.setText(Base64.encodeToString(mSignature, Base64.DEFAULT));
                     Audio.Notify();
                     Toast.makeText(context, "Operation was successful", Toast.LENGTH_SHORT).show();
+
                 } else {
                     Toast.makeText(context, messages[0], Toast.LENGTH_LONG).show();
                 }
                 dismissDialog(DIALOG_WAITING_FOR_SIGNATURE);
             }
         });
+    }
+
+    private void showMessageOKCancel(String message, DialogInterface.OnClickListener okListener) {
+        new AlertDialog.Builder(this)
+                .setMessage(message)
+                .setPositiveButton("OK", okListener)
+                .setNegativeButton("Cancel", null)
+                .create()
+                .show();
     }
 
     // Progress bar settings:
