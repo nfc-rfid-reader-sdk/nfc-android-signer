@@ -6,8 +6,8 @@ android {
         applicationId 'net.dlogic.DLSigner'
         minSdkVersion 19
         targetSdkVersion 26
-        versionCode 3
-        versionName '0.3'
+        versionCode 4
+        versionName '0.4'
     }
     buildTypes {
         release {
@@ -20,6 +20,5 @@ android {
 }
 
 dependencies {
-    implementation files('libs/xmlsec-1.5.8-android.jar')
     implementation files('libs/SpongyCastle/core-1.58.0.0.jar')
 }

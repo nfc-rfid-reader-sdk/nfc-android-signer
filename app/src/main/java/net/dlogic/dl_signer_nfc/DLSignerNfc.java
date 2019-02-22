@@ -95,9 +95,14 @@ public class DLSignerNfc {
         mListeners.add(toAdd);
     }
 
-    private static void callListeners(Boolean success, byte[] result, String... messages) {
+    private static void callListenersSignatureFinished(Boolean success, byte[] result, String... messages) {
         for (DLSignerListener l : mListeners)
-            l.finished(success, result, messages);
+            l.signatureFinished(success, result, messages);
+    }
+
+    private static void callListenersCertReadFinished(Boolean success, byte[] result, String... messages) {
+        for (DLSignerListener l : mListeners)
+            l.certReadFinished(success, result, messages);
     }
 
     private void resolveIntent(Intent intent) {
@@ -123,7 +128,6 @@ public class DLSignerNfc {
 
     static class AsyncSign extends AsyncTask<Byte[], Void, Boolean> {
         private String Message;
-//        private TimeGuard tg = null;
 
         @Override
         protected void onPreExecute() {
@@ -150,17 +154,10 @@ public class DLSignerNfc {
                         throw new DLSignerNfcException("Waiting for card timeout");
                 }
 
-//                tg = new TimeGuard(3000);
-//                tg.start();
-
                 mSignature = innerSign(ArrayUtil.bytesFromObjects(params[0]),
                         ArrayUtil.bytesFromObjects(params[1])[0],
                         ArrayUtil.bytesFromObjects(params[1])[1],
                         ArrayUtil.bytesFromObjects(params[1])[2], ArrayUtil.bytesFromObjects(params[2]));
-
-//                tg.cancel();
-//                tg.join();
-//                tg = null;
 
             } catch (Exception e) { // DLSignerNfcException
                 Message = e.getMessage();
@@ -171,13 +168,6 @@ public class DLSignerNfc {
                 } catch (IOException ioe) {
                     ioe.printStackTrace();
                 }
-//                if (tg != null) {
-//                    try {
-//                        tg.join();
-//                    } catch (InterruptedException e) {
-//                        e.printStackTrace();
-//                    }
-//                }
             }
 
             Message = "Signed successfully";
@@ -186,42 +176,9 @@ public class DLSignerNfc {
 
         @Override
         protected void onPostExecute(Boolean success) {
-            callListeners(success, mSignature, Message);
+            callListenersSignatureFinished(success, mSignature, Message);
         }
     }
-
-    /*/
-    private static class TimeGuard extends Thread {
-        boolean terminateIt = true;
-        int mTimeout;
-
-        TimeGuard(int timeout) {
-            mTimeout = timeout;
-        }
-
-        public synchronized void cancel() {
-            terminateIt = false;
-        }
-
-        private synchronized void terminate() {
-            if (terminateIt) {
-                try {
-                    mTag.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        public void run() {
-
-            long TimeMarker = uptimeMillis();
-            while (terminateIt && (TimeMarker > (uptimeMillis() - mTimeout)))
-                ;
-            terminate();
-        }
-    }
-    //*/
 
     public static void signInitiate(byte[] pin, byte cipherAlg, byte digestAlg, byte key_index, byte[] plain) {
 
@@ -229,7 +186,17 @@ public class DLSignerNfc {
         new AsyncSign().execute(ArrayUtil.bytesToObjects(pin), params, ArrayUtil.bytesToObjects(plain));
     }
 
-    private static byte[] innerSign(byte[] pin, byte cipherAlg, byte digestAlg, byte key_index, byte[] plain) throws DLSignerNfcException, InterruptedException {
+    private static byte[] getCertificate(byte cipherAlg, byte key_index) throws DLSignerNfcException {
+        // byte jcdl_card_type;
+        byte[] selectResponse;
+
+        // selectResponse =
+        apduSelectByAid(Consts.AID);
+        // jcdl_card_type = selectResponse[0];
+        return apduGetObj(cipherAlg, key_index); // Implement chunked
+    }
+
+    private static byte[] innerSign(byte[] pin, byte cipherAlg, byte digestAlg, byte key_index, byte[] plain) throws DLSignerNfcException {
         byte jcdl_card_type;
         byte paddingAlg;
         //byte jc_signer_digest;
@@ -239,12 +206,11 @@ public class DLSignerNfc {
 
         selectResponse = apduSelectByAid(Consts.AID);
         jcdl_card_type = selectResponse[0];
-        //byte DLSignerType = selectResponse[0];
         apduLogin(false, pin);
 
         if (cipherAlg == 0) {
             //---RSA--------------------------------------------------------------------------------
-            switch (digestAlg) {
+            switch (digestAlg + 1) {
                 case 1: // "SHA-1":
                     oid = OIWObjectIdentifiers.idSHA1;
                     break;
@@ -379,6 +345,18 @@ public class DLSignerNfc {
 
         if (rapdu.length != 16)
             throw new DLSignerNfcException("Unsupported card");
+
+        return rapdu;
+    }
+
+    public static byte[] apduGetObj(byte cipherAlg, byte key_index) throws DLSignerNfcException {
+        byte[] sw = new byte[2];
+        byte p1 = 0, p2 = 0;
+
+        byte[] rapdu = transceiveAPDU(Consts.CLA_DEFAULT, Consts.INS_GET_OBJ, p1, p2, null, (short) 0, true, sw);
+
+        if (Bitwise.bytesToShortBE(sw) != (short) 0x9000)
+            throw new DLSignerNfcException("APDU Error: " + getApduError(sw));
 
         return rapdu;
     }

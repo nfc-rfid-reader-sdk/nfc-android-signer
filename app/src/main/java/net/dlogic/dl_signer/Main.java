@@ -32,23 +32,15 @@ import net.dlogic.dl_signer_nfc.DLSignerListener;
 import net.dlogic.dl_signer_nfc.DLSignerNfc;
 import net.dlogic.util.StringUtil;
 
-import org.apache.xml.security.utils.Constants;
-import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
-
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-
-import javax.xml.parsers.*;
 
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
-import java.security.PublicKey;
-import java.security.cert.X509Certificate;
-import org.w3c.dom.*;
-import org.apache.xml.security.keys.KeyInfo;
-import org.apache.xml.security.signature.XMLSignature;
 
 /**
  * Created by d-logic on 12.02.2019.
@@ -70,7 +62,6 @@ public class Main extends Activity {
 
     private String[] mStrDigestAlgorithms;
     private byte mCipherAlg = 0; // 0 => RSA; 1 => ECDSA
-    private byte mPaddingAlg = 0; // 0 => None; 1 => PKCS1
     private byte mDigestAlg = 2; // 0 => SHA1; 1 => SHA-224; 2 => SHA-256; 3 => SHA-384; 4 => SHA-512
     private byte mKeyIdx = 0; // default key index in card
 
@@ -230,23 +221,53 @@ public class Main extends Activity {
 
         btnSaveSignature.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                final String[] mFileFilter = { "*.*", ".xml", ".txt"};
+
+                if (mSignature == null) {
+                    Toast.makeText(Main.this, "First sign the file", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                final String[] mFileFilter = { "*.*", ".bin", ".sgn"};
 
                 new FileSelector(Main.this, FileOperation.SAVE, new OnHandleFileListener() {
                     @Override
                     public void handleFile(final String filePath) {
 
-                        // Handle save dialog here:
-                        Toast.makeText(Main.this, "Save: " + filePath, Toast.LENGTH_LONG).show();
+                        FileOutputStream f;
+                        try {
+                            f = new FileOutputStream(filePath);
+                        } catch (FileNotFoundException e) {
+                            e.printStackTrace();
+                            Toast.makeText(Main.this, "Failed to save: " + filePath, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+
+                        try {
+                            f.write(mSignature);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            Toast.makeText(Main.this, "Failed to save: " + filePath, Toast.LENGTH_LONG).show();
+                            return;
+                        } finally {
+                            try {
+                                f.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        Toast.makeText(Main.this, "Successfully saved: " + filePath, Toast.LENGTH_LONG).show();
                     }
-                },
-                        mFileFilter).show();
+                }
+
+                , mFileFilter).show();
+
             }
         });
 
         mDLSignerNfc.addListener(new DLSignerListener() {
             @Override
-            public void finished(Boolean success, byte[] result, String... messages) {
+            public void signatureFinished(Boolean success, byte[] result, String... messages) {
                 if (success) {
 
                     mSignature = result.clone();
@@ -258,6 +279,14 @@ public class Main extends Activity {
                     Toast.makeText(context, messages[0], Toast.LENGTH_LONG).show();
                 }
                 dismissDialog(DIALOG_WAITING_FOR_SIGNATURE);
+            }
+            @Override
+            public void certReadFinished(Boolean success, byte[] result, String... messages) {
+                if (success) {
+
+                } else {
+                    Toast.makeText(context, messages[0], Toast.LENGTH_LONG).show();
+                }
             }
         });
     }
@@ -301,13 +330,26 @@ public class Main extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         String str;
 
-        if (data != null) {
-            Uri tempUri = data.getData();
+        if (resultCode == Activity.RESULT_OK) {
+            if (data != null) {
+                Uri tempUri = data.getData();
 //            str = mInputFileUri.toString().replace("%2F", "/").replace("%3A", ":").replace("%20", " ");
-            str = StringUtil.getFileName(this, tempUri);
-            if (!str.equals("")) {
-                mInputFileUri = tempUri;
-                ebFile.setText(str);
+                str = StringUtil.getFileName(this, tempUri);
+                if (!str.equals("")) {
+                    mInputFileUri = tempUri;
+                    ebFile.setText(str);
+                    mDigest = null;
+                    ebDigest.setText("");
+                    mSignature = null;
+                    ebSignature.setText("");
+                } else {
+                    mInputFileUri = null;
+                    ebFile.setText("");
+                    mDigest = null;
+                    ebDigest.setText("");
+                    mSignature = null;
+                    ebSignature.setText("");
+                }
             }
         }
 
@@ -320,8 +362,8 @@ public class Main extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
 
         try {
-            startActivityForResult(
-                    Intent.createChooser(intent, "Select a File to Sign"), FILE_SELECT_CODE);
+            startActivityForResult(Intent.createChooser(intent, "Select a File to Sign"), FILE_SELECT_CODE);
+
         } catch (android.content.ActivityNotFoundException ex) {
             // Potentially direct the user to the Market with a Dialog
             Toast.makeText(this, "Please install a File Manager.", Toast.LENGTH_SHORT).show();
@@ -335,42 +377,21 @@ public class Main extends Activity {
             return;
         }
 
-        new HashFile().execute(new File(mInputFileUri.getPath()));
-
-        /*
-        InputStream is = null;
-
-        ContentResolver cr = getContentResolver();
-
-
-        byte[] plain = {1,2,3,4,5,6,7,8,9,10};
-
+        FileInputStream fis;
 
         try {
-                is = cr.openInputStream(mInputFileUri);
-//                XMLVerify.verifySignature(is);
-                int av = is.available();
-                int x = av + 1;
-
+            fis = (FileInputStream) getContentResolver().openInputStream(mInputFileUri);
 
         } catch (FileNotFoundException e) {
             e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            if (is != null)
-                try {
-                    is.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+            Toast.makeText(this, "File not found", Toast.LENGTH_LONG).show();
+            return;
         }
-        */
+
+        new HashFile().execute(fis);
     }
 
-    class HashFile extends AsyncTask<File, Integer, Boolean> {
+    class HashFile extends AsyncTask<FileInputStream, Integer, Boolean> {
 
         @Override
         protected void onPreExecute() {
@@ -378,30 +399,32 @@ public class Main extends Activity {
         }
 
         @Override
-        protected Boolean doInBackground(File... files) {
+        protected Boolean doInBackground(FileInputStream... files) {
 
-            try {
+            if (mDigest == null) {
+                try {
 
-                MessageDigest md = MessageDigest.getInstance(mStrDigestAlgorithms[mDigestAlg]);
-                FileInputStream in = new FileInputStream(files[0]);
-                float flen = (float) files[0].length();
-                float fprogress = (float) 0;
-                Integer progress;
+                    MessageDigest md = MessageDigest.getInstance(mStrDigestAlgorithms[mDigestAlg]);
+                    FileInputStream in = files[0]; // new FileInputStream(files[0]);
+                    float flen = (float) files[0].getChannel().size(); //.length();
+                    float fprogress = (float) 0;
+                    Integer progress;
 
-                byte [] buff = new byte[DIGEST_CHUNK_SIZE];
-                while (in.read(buff, 0, DIGEST_CHUNK_SIZE) != -1)
-                {
-                    md.update(buff);
-                    fprogress += DIGEST_CHUNK_SIZE;
-                    progress = (int) (fprogress * PROGRESS_SCALE / flen);
-                    publishProgress(progress);
+                    byte[] buff = new byte[DIGEST_CHUNK_SIZE];
+                    int len;
+                    while ((len = in.read(buff, 0, DIGEST_CHUNK_SIZE)) != -1) {
+                        md.update(buff, 0 , len);
+                        fprogress += DIGEST_CHUNK_SIZE;
+                        progress = (int) (fprogress * PROGRESS_SCALE / flen);
+                        publishProgress(progress);
+                    }
+
+                    mDigest = md.digest();
+
+                } catch (Exception e) {
+                    Log.d(LOG_TAG, e.getMessage());
+                    return false;
                 }
-
-                mDigest = md.digest();
-
-            } catch (Exception e) {
-                Log.d(LOG_TAG, e.getMessage());
-                return false;
             }
 
             return true;
@@ -427,57 +450,6 @@ public class Main extends Activity {
                 showDialog(DIALOG_WAITING_FOR_SIGNATURE);
                 DLSignerNfc.signInitiate(pin, mCipherAlg, mDigestAlg, mKeyIdx, mDigest);
             }
-        }
-    }
-
-    public static class XMLVerify {
-        void XMLVerify() {}
-
-        static {
-            org.apache.xml.security.Init.init();
-        }
-
-        static boolean verifySignature(InputStream in) {
-            boolean valid = false;
-            try {
-                // parse the XML
-                DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-                f.setNamespaceAware(true);
-                Document doc = f.newDocumentBuilder().parse(in);
-                in.close();
-
-                // verify signature
-                NodeList nodes = doc.getElementsByTagNameNS(Constants.SignatureSpecNS, "Signature");
-                if (nodes.getLength() == 0) {
-                    throw new Exception("Signature NOT found!");
-                }
-
-                Element sigElement = (Element) nodes.item(0);
-                XMLSignature signature = new XMLSignature(sigElement, "");
-
-                KeyInfo ki = signature.getKeyInfo();
-                if (ki == null) {
-                    throw new Exception("Did not find KeyInfo");
-                }
-
-                X509Certificate cert = signature.getKeyInfo().getX509Certificate();
-                if (cert == null) {
-                    PublicKey pk = signature.getKeyInfo().getPublicKey();
-                    if (pk == null) {
-                        throw new Exception("Did not find Certificate or Public Key");
-                    }
-                    org.apache.xml.security.signature.SignedInfo var2 = signature.getSignedInfo();
-                    valid = signature.checkSignatureValue(pk);
-                }
-                else {
-                    valid = signature.checkSignatureValue(cert);
-                }
-            }
-            catch (Exception e) {
-                e.printStackTrace();
-            }
-
-            return valid;
         }
     }
 }
