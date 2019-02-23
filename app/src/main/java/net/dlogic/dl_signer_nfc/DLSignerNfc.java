@@ -332,7 +332,22 @@ public class DLSignerNfc {
             paddingAlg = 0; // PaddingNone is only supported for ECDSA
         }
 
-        return apduGenerateSignature(cipherAlg, paddingAlg, key_index, tbs_digest);
+        byte[] rapdu;
+        byte[] ret;
+        rapdu = apduGenerateSignature(cipherAlg, paddingAlg, key_index, tbs_digest);
+
+        if (cipherAlg == 0) {
+            //---RSA--------------------------------------------------------------------------------
+            return rapdu;
+        } else {
+            //---ECDSA------------------------------------------------------------------------------
+            // In case of ECDSA signature, last 2 bytes are ushort value representing the key_size in bits
+            // We can drop them for now
+            rapdu = apduGenerateSignature(cipherAlg, paddingAlg, key_index, tbs_digest);
+            ret = new byte[rapdu.length - 2];
+            System.arraycopy(rapdu, 0, ret, 0, rapdu.length - 2);
+            return ret;
+        }
     }
 
     public static byte[] apduSelectByAid(byte[] aid) throws DLSignerNfcException {
