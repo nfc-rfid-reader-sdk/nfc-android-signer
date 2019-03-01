@@ -30,6 +30,7 @@ import net.dlogic.dialogs.FileSelector;
 import net.dlogic.dialogs.OnHandleFileListener;
 import net.dlogic.dl_signer_nfc.DLSignerListener;
 import net.dlogic.dl_signer_nfc.DLSignerNfc;
+import net.dlogic.util.ArrayUtil;
 import net.dlogic.util.StringUtil;
 
 import java.io.File;
@@ -271,7 +272,8 @@ public class Main extends Activity {
                 if (success) {
 
                     mSignature = result.clone();
-                    ebSignature.setText(Base64.encodeToString(mSignature, Base64.DEFAULT));
+                    //ebSignature.setText(Base64.encodeToString(mSignature, Base64.DEFAULT));
+                    ebSignature.setText(ArrayUtil.bytesToHex(mSignature));
                     Audio.Notify();
                     Toast.makeText(context, "Operation was successful", Toast.LENGTH_SHORT).show();
 
@@ -444,7 +446,8 @@ public class Main extends Activity {
                 mDigest = null;
             else {
 
-                ebDigest.setText(Base64.encodeToString(mDigest, Base64.DEFAULT));
+                //ebDigest.setText(Base64.encodeToString(mDigest, Base64.DEFAULT));
+                ebDigest.setText(ArrayUtil.bytesToHex(mDigest));
                 byte[] pin = ebUserPin.getText().toString().getBytes(Charset.forName("US-ASCII"));
 
                 showDialog(DIALOG_WAITING_FOR_SIGNATURE);
